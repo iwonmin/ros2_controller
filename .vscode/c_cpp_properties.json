@@ -3,8 +3,9 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/include/**",
                 "/opt/ros/humble/include/**"
+                
             ],
             "defines": [],
             "cStandard": "c17",
