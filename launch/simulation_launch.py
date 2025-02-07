@@ -7,7 +7,7 @@ def generate_launch_description():
     controller_node = Node(
         package= 'ros2_controller',
         namespace= '',
-        executable= 'controlla',
+        executable= 'controlla_node',
         output='screen'
     )
     ld.add_action(controller_node)

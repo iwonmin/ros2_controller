@@ -29,4 +29,5 @@ private:
   bool updated = false;
   double world_maxdist = 1.0;
   DynamicEDTMapPtr dynamic_edt_map_ptr = nullptr;
+  Octree_ptr octree_ptr = nullptr;
 };
