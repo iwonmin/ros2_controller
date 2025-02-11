@@ -3,6 +3,7 @@
 #include <octomap_msgs/conversions.h>
 #include <octomap_msgs/msg/octomap.hpp>
 #include <sensor_msgs/sensor_msgs/msg/point_cloud2.h>
+#include <optional>
 
 typedef std::shared_ptr<octomap::OcTree> Octree_ptr;
 typedef DynamicEDTOctomapBase<octomap::OcTree> DynamicEDTOctomap;
@@ -19,15 +20,21 @@ public:
 
   [[nodiscard]] DynamicEDTMapPtr get_dist_map_ptr() const;
 
-  [[nodiscard]] void get_distance_and_closest_obstacle(const octomap::point3d& search_point,
+  void get_distance_and_closest_obstacle(const octomap::point3d& search_point,
                                                        float& distance,
                                                        octomap::point3d& closest_obstacle) const;
 
   [[nodiscard]] bool is_updated() const { return updated; }
 
+  [[nodiscard]] double get_world_maxdist() const { return world_maxdist; }
+  
+  std::vector<octomap::point3d> get_occupied_grid_points() const;
+
+  bool is_free(float x, float y) const;
+
 private:
+  Octree_ptr octree_ptr = nullptr;
   bool updated = false;
   double world_maxdist = 1.0;
   DynamicEDTMapPtr dynamic_edt_map_ptr = nullptr;
-  Octree_ptr octree_ptr = nullptr;
 };
