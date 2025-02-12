@@ -9,7 +9,7 @@ CmdPublisher::CmdPublisher() : Node("cmd_publisher") {
     pub_marker = this->create_publisher<visualization_msgs::msg::Marker>("/visualization_marker", 10);
     // Subscriber
     sub_octomap = this->create_subscription<OctomapMsg>("octomap_full", 10, std::bind(&CmdPublisher::octomap_callback, this, _1));
-    sub_laser = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", 10, std::bind(&CmdPublisher::laser_callback, this, _1));
+    // sub_laser = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", 10, std::bind(&CmdPublisher::laser_callback, this, _1));
     sub_goal = this->create_subscription<geometry_msgs::msg::PoseStamped>("/move_base_simple/goal", 10, std::bind(&CmdPublisher::goal_callback, this, _1));
     // TF listener
     tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -200,18 +200,27 @@ void CmdPublisher::timer_cmd_callback() {
         RCLCPP_WARN(this->get_logger(), "map or tf not updated.");
         return;
     }
-    if (minimum_distance < OBSTACLE_THRESHOLD || evasion) {
+    octomap::point3d search_point(x, y, z);
+    octomap::point3d closest_obstacle;
+    float distance; 
+    map.get_distance_and_closest_obstacle(search_point, distance, closest_obstacle);
+    double obstacle_angle = atan2(closest_obstacle.y() - y, closest_obstacle.x() - x);
+    if (distance < OBSTACLE_THRESHOLD || evasion) {
         evasion = true;
         RCLCPP_WARN(this->get_logger(), "Obstacle too close! Avoiding.");
         geometry_msgs::msg::Twist cmd_vel;
-        cmd_vel.linear.x = -0.1f;
+        if(fabs(obstacle_angle - yaw) < M_PI_4) {
+            cmd_vel.linear.x = -0.1f;
+        } else if(fabs(obstacle_angle - yaw) > 3 * M_PI_4) {
+            cmd_vel.linear.x = +0.1f;
+        }
         cmd_vel.angular.z = (normalize_angle(minimum_distance_angle) - yaw) > 0 ? -0.5 : 0.5;
         pub_cmd->publish(cmd_vel);
-        if(minimum_distance > 0.26f) evasion = false;
+        if(distance > 0.25f) evasion = false;
         return;
     }
     float path_followed = hypot(x - start_point.x(), y - start_point.y());
-    if(goal_state == GoalState::NOT_ACHIEVED && (path_followed >= 0.3f || goal_received)) {
+    if(goal_state == GoalState::NOT_ACHIEVED && (path_followed >= 0.5f || goal_received)) {
         goal_received = false;
         path = plan_path(x, y, goal.pose.position.x, goal.pose.position.y);
         waypoint_visualize(path);
@@ -273,22 +282,33 @@ void CmdPublisher::Controller() {
                 }
                 target = path.front();
             }
-            if (distance_to_target > 0.3f) {
-                RCLCPP_INFO(this->get_logger(), "Deviation Detected, Replanning..");
-                cmd_vel.linear.x = 0.0;
-                cmd_vel.angular.z = 0.0;
-                path = plan_path(x, y, goal.pose.position.x, goal.pose.position.y);
-                return;
-            }
             float dx = target.pose.position.x - x;
             float dy = target.pose.position.y - y;
             float angle_to_target = atan2(dy, dx);
-            angular.SetPID(1.5f, 0.005f, 0.3f);
-            cmd_vel.angular.z = std::clamp(angular.Output(angle_to_target, yaw), -max_angular, max_angular);
+            if (fabs(angle_to_target - yaw) > 0.2f) {
+                // deviation = true;
+                RCLCPP_INFO(this->get_logger(), "Deviation Detected, Orienting..");
+                cmd_vel.linear.x = 0.0f;
+                angular.SetPID(2.0f, 0.01f, 0.8f);
+                cmd_vel.angular.z = std::clamp(angular.Output(angle_to_target, yaw), -max_angular, max_angular);
+                RCLCPP_INFO(this->get_logger(), "%.7f, %.7f", angle_to_target, yaw);
+                pub_cmd->publish(cmd_vel);
+                // if (std::abs(angular.error) < 0.12f) {
+                //     deviation = false;
+                //     cmd_vel.angular.z = 0.f;
+                // }
+
+            } else {
+                cmd_vel.linear.x = std::clamp((distance_to_target * 1.0f), -max_linear, max_linear);
+                // cmd_vel.linear.x = 0.08f;
+                // RCLCPP_INFO(this->get_logger(), "%.7f, %.7f", cmd_vel.linear.x, cmd_vel.angular.z);
+                pub_cmd->publish(cmd_vel);
+            }
+            // angular.SetPID(1.2f, 0.0001f, 0.8f);
+            // cmd_vel.angular.z = std::clamp(angular.Output(angle_to_target, yaw), -max_angular, max_angular);
+            
             // linear.SetPID(1.0f, 0.01f, 0.5f);
-            cmd_vel.linear.x = std::clamp(distance_to_target * 1.0, -max_linear, max_linear);
-            // cmd_vel.linear.x = 0.15f;
-            pub_cmd->publish(cmd_vel);
+
 
             break;}
         case GoalState::POSITION_ACHIEVED:{

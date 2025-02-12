@@ -27,8 +27,6 @@ public:
   [[nodiscard]] bool is_updated() const { return updated; }
 
   [[nodiscard]] double get_world_maxdist() const { return world_maxdist; }
-  
-  std::vector<octomap::point3d> get_occupied_grid_points() const;
 
   bool is_free(float x, float y) const;
 

@@ -19,7 +19,7 @@ struct PIDController {
   double prev_error, integral;
   double error;
 
-  double Output(double reference_, double current_) {
+  float Output(double reference_, double current_) {
     reference = reference_;
     current = current_;
     error = reference - current;
@@ -114,6 +114,7 @@ class CmdPublisher : public rclcpp::Node {
         ACHIEVED
     } goal_state = GoalState::ACHIEVED;
     bool evasion = false;
+    bool deviation = false;
     //sensor
     float minimum_distance = std::numeric_limits<float>::max();
     float minimum_distance_angle = 0.f;
@@ -123,14 +124,15 @@ class CmdPublisher : public rclcpp::Node {
     float angle_increment = 0.f;
 
     float resolution=0.2;
-    const float OBSTACLE_THRESHOLD = 0.22f;
+    const float OBSTACLE_THRESHOLD = 0.2f;
     const float GOAL_THRESHOLD = 0.1f;
     float search_radius = 10.0;
     //PID
     PIDController linear;
     PIDController angular;
-    const double max_linear = 0.15f;
-    const double max_angular = 0.9f;
+
+    const float max_linear = 0.2f;
+    const float max_angular = 0.8f;
 
     Map map;
     //messages
@@ -140,7 +142,7 @@ class CmdPublisher : public rclcpp::Node {
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker;
 
     rclcpp::Subscription<OctomapMsg>::SharedPtr sub_octomap;
-    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_laser;
+    // rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_laser;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal;    
 
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
