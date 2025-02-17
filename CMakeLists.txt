@@ -22,6 +22,7 @@ link_libraries(${DYNAMICEDT3D_LIBRARIES})
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
@@ -34,6 +35,7 @@ find_package(octomap_msgs REQUIRED)
 set(ROS2_PACKAGES
   rclcpp
   std_msgs
+  std_srvs
   geometry_msgs
   tf2
   tf2_ros

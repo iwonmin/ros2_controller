@@ -46,17 +46,29 @@ bool Map::is_free(float x, float y) const {
 
   return distance > 0.3f; 
 }
-// bool Map::cast_ray(const octomap::point3d& origin, 
-//                    const octomap::point3d& direction, 
-//                    octomap::point3d& hit_point) 
-// {
-//     if (!octree_ptr) {
-//         return false;
-//     }
+bool Map::cast_ray(const octomap::point3d& origin, 
+                   const octomap::point3d& direction, 
+                   octomap::point3d& hit_point) 
+{
+    if (!octree_ptr) {
+        return false;
+    }
 
-//     octomap::point3d normalized_dir = direction - origin;
-//     normalized_dir.normalize();
+    octomap::point3d normalized_dir = direction - origin;
+    normalized_dir.normalize();
 
-//     bool hit = octree_ptr->castRay(origin, normalized_dir, hit_point);
-//     return hit; 
-// }
+    bool hit = octree_ptr->castRay(origin, normalized_dir, hit_point);
+    return hit; 
+}
+
+bool Map::clear_obstacle(const octomap::point3d& origin, const octomap::point3d& direction) {
+  octomap::point3d hit_point;
+  bool hit = cast_ray(origin, direction, hit_point);
+
+  if (hit) {
+  // 장애물 제거
+    octree_ptr->deleteNode(hit_point);
+    return true;
+  }
+  return false;
+}

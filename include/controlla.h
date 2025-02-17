@@ -7,6 +7,7 @@
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "std_srvs/srv/empty.hpp"
 #include <algorithm>
 #include "map.h"
 
@@ -59,6 +60,7 @@ struct Compare {
   }
 };
 
+
 class CmdPublisher : public rclcpp::Node {
   public:
     CmdPublisher();
@@ -84,6 +86,8 @@ class CmdPublisher : public rclcpp::Node {
     void timer_tf_callback();
 
     void timer_cmd_callback();
+    
+    void timer_octomap_reset_callback();
 
     void octomap_callback(const OctomapMsg& octomap_msg);
 
@@ -136,7 +140,7 @@ class CmdPublisher : public rclcpp::Node {
 
     Map map;
     //messages
-    rclcpp::TimerBase::SharedPtr timer_cmd, timer_tf, timer_status;
+    rclcpp::TimerBase::SharedPtr timer_cmd, timer_tf, timer_octomap_reset;
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker;
@@ -147,5 +151,7 @@ class CmdPublisher : public rclcpp::Node {
 
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     std::unique_ptr<tf2_ros::Buffer> tf_buffer;
+
+    rclcpp::Client<std_srvs::srv::Empty>::SharedPtr reset_client_;
 
 };
