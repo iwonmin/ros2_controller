@@ -33,12 +33,10 @@ void Map::get_distance_and_closest_obstacle(const octomap::point3d& search_point
   dynamic_edt_map_ptr->getDistanceAndClosestObstacle(search_point, distance, closest_obstacle);
 }
 
-
-
-bool Map::is_free(float x, float y) const {
+bool Map::is_free(double x, double y) const {
   if (!dynamic_edt_map_ptr) return false;
 
-  octomap::point3d query_point(x, y,0.15); 
+  octomap::point3d query_point(x, y, 0.0); 
   float distance;
   octomap::point3d closest_obstacle;
 
@@ -46,29 +44,18 @@ bool Map::is_free(float x, float y) const {
 
   return distance > 0.3f; 
 }
-bool Map::cast_ray(const octomap::point3d& origin, 
-                   const octomap::point3d& direction, 
-                   octomap::point3d& hit_point) 
-{
-    if (!octree_ptr) {
-        return false;
-    }
 
-    octomap::point3d normalized_dir = direction - origin;
-    normalized_dir.normalize();
+// bool Map::is_free(double wx, double wy) const {
+//   if (!octree_ptr) {
+//     return false;
+//   }
 
-    bool hit = octree_ptr->castRay(origin, normalized_dir, hit_point);
-    return hit; 
-}
+//   double wz = 0.0;
+//   octomap::OcTreeNode* node = octree_ptr->search(wx, wy, wz);
+//   if (node == nullptr) {
+//     return false;
+//   }
 
-bool Map::clear_obstacle(const octomap::point3d& origin, const octomap::point3d& direction) {
-  octomap::point3d hit_point;
-  bool hit = cast_ray(origin, direction, hit_point);
-
-  if (hit) {
-  // 장애물 제거
-    octree_ptr->deleteNode(hit_point);
-    return true;
-  }
-  return false;
-}
+//   double occupancy = node->getOccupancy();
+//   return (occupancy < 0.2f);
+// }

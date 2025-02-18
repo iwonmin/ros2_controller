@@ -9,18 +9,18 @@ CmdPublisher::CmdPublisher() : Node("cmd_publisher") {
     pub_marker = this->create_publisher<visualization_msgs::msg::Marker>("/visualization_marker", 10);
     // Subscriber
     sub_octomap = this->create_subscription<OctomapMsg>("octomap_full", 10, std::bind(&CmdPublisher::octomap_callback, this, _1));
-    // sub_laser = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", 10, std::bind(&CmdPublisher::laser_callback, this, _1));
+
+    // rclcpp::QoS qos_laser(rclcpp::KeepLast(10));
+    // qos_laser.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+    // sub_laser = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", qos_laser, std::bind(&CmdPublisher::laser_callback, this, _1));
     sub_goal = this->create_subscription<geometry_msgs::msg::PoseStamped>("/move_base_simple/goal", 10, std::bind(&CmdPublisher::goal_callback, this, _1));
-    // TF listener
+    // TF listenerf
     tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
     // Timer
     timer_tf = this->create_wall_timer(50ms, std::bind(&CmdPublisher::timer_tf_callback, this));
-    timer_cmd = this->create_wall_timer(100ms, std::bind(&CmdPublisher::timer_cmd_callback, this));
-    // timer_octomap_reset = this->create_wall_timer(1s, std::bind(&CmdPublisher::timer_octomap_reset_callback, this));
-
-    //client?
-    reset_client_ = this->create_client<std_srvs::srv::Empty>("/octomap_server/reset");
+    timer_cmd = this->create_wall_timer(50ms, std::bind(&CmdPublisher::timer_cmd_callback, this));
+    // timer_octomap_reset = this->create_wall_timer(1s, std::bind(&CmdPublisher::clear_obstacle, this));
 
 }
 
@@ -197,15 +197,15 @@ void CmdPublisher::timer_tf_callback() {
     yaw = atan2(2.0 * (pose_z * pose_w + pose_x * pose_y), 1.0 - 2.0 * (pose_y * pose_y + pose_z * pose_z));
     yaw = normalize_angle(yaw);
     position_updated = true;
-    octomap::point3d origin(x, y, z);
-    octomap::point3d direction(x * cos(yaw), y * sin(yaw), 0.0);
-    bool hit = false;
-    hit = map.clear_obstacle(origin, direction);
-    if(hit) {
-        RCLCPP_INFO(this->get_logger(), "Obstacle Cleared!");
-    } else {
-        RCLCPP_INFO(this->get_logger(), "No Obstacle Detected!");
-    }
+    // octomap::point3d origin(x, y, z);
+    // octomap::point3d direction(x * cos(yaw), y * sin(yaw), 0.0);
+    // bool hit = false;
+    // hit = map.clear_obstacle(origin, direction);
+    // if(hit) {
+    //     RCLCPP_INFO(this->get_logger(), "Obstacle Cleared!");
+    // } else {
+    //     RCLCPP_INFO(this->get_logger(), "No Obstacle Detected!");
+    // }
 }
 
 void CmdPublisher::timer_cmd_callback() {
@@ -242,13 +242,22 @@ void CmdPublisher::timer_cmd_callback() {
     Controller();
 }
 
-void CmdPublisher::timer_octomap_reset_callback() {
-    auto request = std::make_shared<std_srvs::srv::Empty::Request>();
+// void CmdPublisher::clear_obstacle() {
+//     octomap::point3d origin(x, y, 0);
+//     std::vector<octomap::point3d> ray;
+//     auto range = lidar_value;
+//     for (int i = 0; i < 360; i++) {
+//         if(std::isinf(range[i])) continue;
+//         float angle = yaw + i * angle_increment;
+//         octomap::point3d end(x + cos(angle) * range[i], y + sin(angle) * range[i], 0);
+//         map.octree_ptr->computeRay(origin, end, ray);
+//         for (const octomap::point3d point : ray) {
+//             map.octree_ptr->deleteNode(point);
+//         }
+//     }
+    
 
-    // 서비스 호출
-    auto future = reset_client_->async_send_request(request);
-
-}
+// }
 
 void CmdPublisher::octomap_callback(const OctomapMsg& octomap_msg) {
     octomap::AbstractOcTree* tree = octomap_msgs::fullMsgToMap(octomap_msg);
@@ -258,23 +267,25 @@ void CmdPublisher::octomap_callback(const OctomapMsg& octomap_msg) {
         return;
     }
     octomap::point3d world_min(-5, -5, 0);
-    octomap::point3d world_max(5, 5, 2);  
+    octomap::point3d world_max(5, 5, 2);
     map.update(octomap_msg, world_min, world_max);
+    // clear_obstacle();
 }
 
-void CmdPublisher::laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-    range_max = msg->range_max;
-    range_min = msg->range_min;
-    angle_increment = msg->angle_increment;
-    for (int i = 0; i < msg->ranges.size(); i++) {
-        lidar_value[i] = msg->ranges[i];
-        if(lidar_value[i] < minimum_distance) {
-            minimum_distance = lidar_value[i];
-            minimum_distance_angle = yaw + i * angle_increment;
-        }
-    }
-    RCLCPP_INFO(this->get_logger(), "%.2f! %.2f", minimum_distance, minimum_distance_angle);
-}
+// void CmdPublisher::laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+//     range_max = msg->range_max;
+//     range_min = msg->range_min;
+//     angle_increment = msg->angle_increment;
+//     for (int i = 0; i < msg->ranges.size(); i++) {
+//         lidar_value[i] = msg->ranges[i];
+//         if(lidar_value[i] < minimum_distance) {
+//             minimum_distance = lidar_value[i];
+//             minimum_distance_angle = yaw + i * angle_increment;
+//         }
+//     }
+//     RCLCPP_INFO(this->get_logger(), "%.2f! %.2f", lidar_value[3], minimum_distance);
+    
+// }
 
 void CmdPublisher::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
     goal_received = true;
@@ -289,32 +300,33 @@ void CmdPublisher::Controller() {
         case GoalState::NOT_ACHIEVED:{
             if (path.empty()) return;
             geometry_msgs::msg::PoseStamped target = path.front(); 
-            float distance_to_target = hypot(x - target.pose.position.x, y - target.pose.position.y);
-            float distance_to_goal = hypot(x - goal.pose.position.x, y - goal.pose.position.y);
+            [[maybe_unused]] float distance_to_target = hypot(x - target.pose.position.x, y - target.pose.position.y);
+            [[maybe_unused]] float distance_to_goal = hypot(x - goal.pose.position.x, y - goal.pose.position.y);
             if (distance_to_target < GOAL_THRESHOLD) {
                 path.erase(path.begin());
                 if (path.empty()) {
                     goal_state = GoalState::POSITION_ACHIEVED;
                     RCLCPP_INFO(this->get_logger(), "Goal position achieved!");
-                    cmd_vel.linear.z = 0.0;
+                    cmd_vel.linear.x = 0.0;
                     cmd_vel.angular.z = 0.0;
                     pub_cmd->publish(cmd_vel);
                     return;
                 }
                 target = path.front();
             }
-            float dx = target.pose.position.x - x;
-            float dy = target.pose.position.y - y;
-            float angle_to_target = atan2(dy, dx);
-            if (fabs(angle_to_target - yaw) > 0.1f) {
+            float angle_to_target = atan2(target.pose.position.y - y, target.pose.position.x - x);
+            if (std::abs(angle_to_target - yaw) > 0.1f) {
                 RCLCPP_INFO(this->get_logger(), "Deviation Detected, Orienting..");
-                cmd_vel.linear.x = 0.0f;
-                angular.SetPID(2.5f, 0.01f, 0.5f);
-                cmd_vel.angular.z = std::clamp(angular.Output(angle_to_target, yaw), -max_angular, max_angular);
+                // linear.SetPID(1.2f, 0.0001f, 0.8f);
+                // cmd_vel.linear.x = std::clamp(linear.Output(distance_to_target, 0.0f), -max_linear, max_linear);
+                cmd_vel.linear.x = 0.0;
+                angular.SetPID(1.7f, 0.12f, 0.5f);
+                cmd_vel.angular.z = std::clamp(angular.Output(angle_to_target, yaw, true), -max_angular, max_angular);
                 // RCLCPP_INFO(this->get_logger(), "%.7f, %.7f", angle_to_target, yaw);
                 pub_cmd->publish(cmd_vel);
             } else {
-                cmd_vel.linear.x = std::clamp((distance_to_goal * 1.0f), -max_linear, max_linear);
+                linear.SetPID(0.03f, 0.02f, 0.04f);
+                cmd_vel.linear.x = std::clamp(linear.Output(distance_to_target), -max_linear, max_linear);
                 // cmd_vel.linear.x = 0.08f;
                 // RCLCPP_INFO(this->get_logger(), "%.7f, %.7f", cmd_vel.linear.x, cmd_vel.angular.z);
                 pub_cmd->publish(cmd_vel);
@@ -328,8 +340,8 @@ void CmdPublisher::Controller() {
             break;}
         case GoalState::POSITION_ACHIEVED:{
             double goal_yaw = atan2(2.0 * (goal.pose.orientation.z * goal.pose.orientation.w + goal.pose.orientation.x * goal.pose.orientation.y), 1.0 - 2.0 * (goal.pose.orientation.y * goal.pose.orientation.y + goal.pose.orientation.z * goal.pose.orientation.z));
-            angular.SetPID(2.5f, 0.01f, 0.5f);
-            cmd_vel.angular.z = std::clamp(angular.Output(goal_yaw, yaw), -max_angular, max_angular);
+            angular.SetPID(1.7f, 0.12f, 0.5f);
+            cmd_vel.angular.z = std::clamp(angular.Output(goal_yaw, yaw, true), -max_angular, max_angular);
             pub_cmd->publish(cmd_vel);
             if (std::abs(angular.error) < 0.1f) {
                 goal_state = GoalState::ACHIEVED;

@@ -7,7 +7,6 @@
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "std_srvs/srv/empty.hpp"
 #include <algorithm>
 #include "map.h"
 
@@ -20,14 +19,15 @@ struct PIDController {
   double prev_error, integral;
   double error;
 
-  float Output(double reference_, double current_) {
+  float Output(double reference_, double current_=0.f, bool normalize=false) {
     reference = reference_;
     current = current_;
     error = reference - current;
     integral += error;
     derivative = (error - prev_error) / dt;
     prev_error = error;
-    return Kp * error + Ki * integral + Kd * derivative;
+    if(normalize) return Kp * atan2(sin(error), cos(error)) + Ki * atan2(sin(integral), cos(integral)) + Kd * atan2(sin(derivative), cos(derivative)); 
+    else return Kp * error + Ki * integral + Kd * derivative;
   }
 
   void SetPID(double Kp_, double Ki_, double Kd_) {
@@ -87,7 +87,7 @@ class CmdPublisher : public rclcpp::Node {
 
     void timer_cmd_callback();
     
-    void timer_octomap_reset_callback();
+    void clear_obstacle();
 
     void octomap_callback(const OctomapMsg& octomap_msg);
 
@@ -127,7 +127,7 @@ class CmdPublisher : public rclcpp::Node {
     float lidar_value[360] = {0.f,};
     float angle_increment = 0.f;
 
-    float resolution=0.2;
+    float resolution = 0.2;
     const float OBSTACLE_THRESHOLD = 0.2f;
     const float GOAL_THRESHOLD = 0.1f;
     float search_radius = 10.0;
@@ -135,7 +135,7 @@ class CmdPublisher : public rclcpp::Node {
     PIDController linear;
     PIDController angular;
 
-    const float max_linear = 0.2f;
+    const float max_linear = 0.15f;
     const float max_angular = 0.8f;
 
     Map map;
@@ -146,12 +146,10 @@ class CmdPublisher : public rclcpp::Node {
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker;
 
     rclcpp::Subscription<OctomapMsg>::SharedPtr sub_octomap;
-    // rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_laser;
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_laser;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal;    
 
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     std::unique_ptr<tf2_ros::Buffer> tf_buffer;
-
-    rclcpp::Client<std_srvs::srv::Empty>::SharedPtr reset_client_;
 
 };

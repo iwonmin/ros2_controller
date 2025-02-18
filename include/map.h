@@ -28,11 +28,8 @@ public:
     
   [[nodiscard]] double get_world_maxdist() const { return world_maxdist; }
 
-  bool is_free(float x, float y) const;
+  bool is_free(double x, double y) const;
 
-  bool cast_ray(const octomap::point3d& origin, const octomap::point3d& direction, octomap::point3d& hit_point);
-  
-  bool clear_obstacle(const octomap::point3d& origin, const octomap::point3d& direction);
 
 private:
   Octree_ptr octree_ptr = nullptr;
