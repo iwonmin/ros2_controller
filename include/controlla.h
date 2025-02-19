@@ -105,7 +105,7 @@ class CmdPublisher : public rclcpp::Node {
     
     octomap::point3d start_point;
     geometry_msgs::msg::PoseStamped goal;
-
+    geometry_msgs::msg::PoseStamped prev_target;
     std::vector<geometry_msgs::msg::PoseStamped> path;
     //flags
     bool goal_received = false;
@@ -128,7 +128,7 @@ class CmdPublisher : public rclcpp::Node {
     float angle_increment = 0.f;
 
     float resolution = 0.2;
-    const float OBSTACLE_THRESHOLD = 0.2f;
+    const float OBSTACLE_THRESHOLD = 0.3f;
     const float GOAL_THRESHOLD = 0.1f;
     float search_radius = 10.0;
     //PID
@@ -140,7 +140,7 @@ class CmdPublisher : public rclcpp::Node {
 
     Map map;
     //messages
-    rclcpp::TimerBase::SharedPtr timer_cmd, timer_tf, timer_octomap_reset;
+    rclcpp::TimerBase::SharedPtr timer_cmd, timer_tf;
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker;

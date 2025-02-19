@@ -10,9 +10,9 @@ CmdPublisher::CmdPublisher() : Node("cmd_publisher") {
     // Subscriber
     sub_octomap = this->create_subscription<OctomapMsg>("octomap_full", 10, std::bind(&CmdPublisher::octomap_callback, this, _1));
 
-    // rclcpp::QoS qos_laser(rclcpp::KeepLast(10));
-    // qos_laser.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
-    // sub_laser = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", qos_laser, std::bind(&CmdPublisher::laser_callback, this, _1));
+    rclcpp::QoS qos_laser(rclcpp::KeepLast(10));
+    qos_laser.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+    sub_laser = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", qos_laser, std::bind(&CmdPublisher::laser_callback, this, _1));
     sub_goal = this->create_subscription<geometry_msgs::msg::PoseStamped>("/move_base_simple/goal", 10, std::bind(&CmdPublisher::goal_callback, this, _1));
     // TF listenerf
     tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -21,7 +21,15 @@ CmdPublisher::CmdPublisher() : Node("cmd_publisher") {
     timer_tf = this->create_wall_timer(50ms, std::bind(&CmdPublisher::timer_tf_callback, this));
     timer_cmd = this->create_wall_timer(50ms, std::bind(&CmdPublisher::timer_cmd_callback, this));
     // timer_octomap_reset = this->create_wall_timer(1s, std::bind(&CmdPublisher::clear_obstacle, this));
-
+    // Parameters
+    this->declare_parameter("angular_kp", 1.7f);
+    this->declare_parameter("angular_ki", 0.12f);
+    this->declare_parameter("angular_kd", 0.5f);
+    this->declare_parameter("linear_kp", 0.03f);
+    this->declare_parameter("linear_ki", 0.02f);
+    this->declare_parameter("linear_kd", 0.04f);
+    angular.SetPID(this->get_parameter("angular_kp").as_double(), this->get_parameter("angular_ki").as_double(), this->get_parameter("angular_kd").as_double());
+    linear.SetPID(this->get_parameter("linear_kp").as_double(), this->get_parameter("linear_ki").as_double(), this->get_parameter("linear_kd").as_double());
 }
 
 // A* Path Planning
@@ -197,15 +205,6 @@ void CmdPublisher::timer_tf_callback() {
     yaw = atan2(2.0 * (pose_z * pose_w + pose_x * pose_y), 1.0 - 2.0 * (pose_y * pose_y + pose_z * pose_z));
     yaw = normalize_angle(yaw);
     position_updated = true;
-    // octomap::point3d origin(x, y, z);
-    // octomap::point3d direction(x * cos(yaw), y * sin(yaw), 0.0);
-    // bool hit = false;
-    // hit = map.clear_obstacle(origin, direction);
-    // if(hit) {
-    //     RCLCPP_INFO(this->get_logger(), "Obstacle Cleared!");
-    // } else {
-    //     RCLCPP_INFO(this->get_logger(), "No Obstacle Detected!");
-    // }
 }
 
 void CmdPublisher::timer_cmd_callback() {
@@ -213,29 +212,34 @@ void CmdPublisher::timer_cmd_callback() {
         RCLCPP_WARN(this->get_logger(), "map or tf not updated.");
         return;
     }
-    octomap::point3d search_point(x, y, z);
-    octomap::point3d closest_obstacle;
-    float distance; 
-    map.get_distance_and_closest_obstacle(search_point, distance, closest_obstacle);
-    double obstacle_angle =atan2(closest_obstacle.y() - y, closest_obstacle.x() - x);
-    if (distance < OBSTACLE_THRESHOLD || evasion) {
+    // octomap::point3d search_point(x, y, 0);
+    float obstacle_distance = minimum_distance;
+    float obstacle_angle = normalize_angle(minimum_distance_angle);
+    // octomap::point3d closest_obstacle(x + cos(obstacle_angle) * obstacle_distance, y + sin(obstacle_angle) * obstacle_distance, 0);
+    // map.get_distance_and_closest_obstacle(search_point, distance, closest_obstacle);
+    if (obstacle_distance < OBSTACLE_THRESHOLD || evasion) {
         evasion = true;
         RCLCPP_WARN(this->get_logger(), "Obstacle too close! Avoiding.");
         geometry_msgs::msg::Twist cmd_vel;
-        if(fabs(obstacle_angle - yaw) < M_PI_4) {
-            cmd_vel.linear.x = -0.1f;
-        } else if(fabs(obstacle_angle - yaw) > 3 * M_PI_4) {
-            cmd_vel.linear.x = +0.1f;
+        if(fabs(minimum_distance_angle) < M_PI_4) {
+            cmd_vel.linear.x = -0.15f;
+        } else if(fabs(minimum_distance_angle) > 3 * M_PI_4) {
+            cmd_vel.linear.x = +0.15f;
         }
-        cmd_vel.angular.z = (normalize_angle(minimum_distance_angle) - yaw) > 0 ? -0.5 : 0.5;
+        cmd_vel.angular.z = obstacle_angle > 0 ? 0.5 : -0.5;
         pub_cmd->publish(cmd_vel);
-        if(distance > 0.25f) evasion = false;
+        if(obstacle_distance > 0.4f) {
+            evasion = false;
+            path = plan_path(x, y, goal.pose.position.x, goal.pose.position.y);
+            waypoint_visualize(path);
+        }
+        minimum_distance = std::numeric_limits<float>::max();
         return;
     }
     float path_followed = hypot(x - start_point.x(), y - start_point.y());
     if(goal_state == GoalState::NOT_ACHIEVED && (path_followed >= 0.5f || goal_received)) {
         goal_received = false; 
-        path = plan_path(x, y, goal.pose.position.x, goal.pose.position.y);
+        if(!deviation) path = plan_path(x, y, goal.pose.position.x, goal.pose.position.y);
         waypoint_visualize(path);
         start_point = octomap::point3d(x, y, z);
     }
@@ -269,23 +273,22 @@ void CmdPublisher::octomap_callback(const OctomapMsg& octomap_msg) {
     octomap::point3d world_min(-5, -5, 0);
     octomap::point3d world_max(5, 5, 2);
     map.update(octomap_msg, world_min, world_max);
-    // clear_obstacle();
 }
 
-// void CmdPublisher::laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-//     range_max = msg->range_max;
-//     range_min = msg->range_min;
-//     angle_increment = msg->angle_increment;
-//     for (int i = 0; i < msg->ranges.size(); i++) {
-//         lidar_value[i] = msg->ranges[i];
-//         if(lidar_value[i] < minimum_distance) {
-//             minimum_distance = lidar_value[i];
-//             minimum_distance_angle = yaw + i * angle_increment;
-//         }
-//     }
-//     RCLCPP_INFO(this->get_logger(), "%.2f! %.2f", lidar_value[3], minimum_distance);
+void CmdPublisher::laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+    range_max = msg->range_max;
+    range_min = msg->range_min;
+    angle_increment = msg->angle_increment;
+    for (int i = 0; i < msg->ranges.size(); i++) {
+        lidar_value[i] = msg->ranges[i];
+        if(lidar_value[i] < minimum_distance) {
+            minimum_distance = lidar_value[i];
+            minimum_distance_angle = i * angle_increment;
+        }
+    }
+    // RCLCPP_INFO(this->get_logger(), "%.2f, %.2f", (180 * minimum_distance_angle / M_PI), minimum_distance);
     
-// }
+}
 
 void CmdPublisher::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
     goal_received = true;
@@ -312,20 +315,33 @@ void CmdPublisher::Controller() {
                     pub_cmd->publish(cmd_vel);
                     return;
                 }
+                prev_target = target;
                 target = path.front();
             }
             float angle_to_target = atan2(target.pose.position.y - y, target.pose.position.x - x);
-            if (std::abs(angle_to_target - yaw) > 0.1f) {
+            if (std::abs(angle_to_target - yaw) > 0.4f || deviation) {
+                deviation = true;
                 RCLCPP_INFO(this->get_logger(), "Deviation Detected, Orienting..");
-                // linear.SetPID(1.2f, 0.0001f, 0.8f);
-                // cmd_vel.linear.x = std::clamp(linear.Output(distance_to_target, 0.0f), -max_linear, max_linear);
+                // double m = (target.pose.position.y - prev_target.pose.position.y) / (target.pose.position.x - prev_target.pose.position.x);
+                // double b = target.pose.position.y - m * target.pose.position.x;
+                // double m_r = std::tan(yaw);
+                // double b_r = y - m_r * x;
+                // double x_i = (b_r - b) / (m - m_r);
+                // double y_i = m * x_i + b;
+                // double distance_to_intersection = hypot(x_i - x, y_i - y);
+                // if(distance_to_intersection > 0.1f) {
+                //     cmd_vel.angular.z = 0.f;
+                //     cmd_vel.linear.x = std::clamp(linear.Output(distance_to_intersection),-max_linear, max_linear);
+                //     pub_cmd->publish(cmd_vel);
+                //     return;
+                // }
                 cmd_vel.linear.x = 0.0;
-                angular.SetPID(1.7f, 0.12f, 0.5f);
                 cmd_vel.angular.z = std::clamp(angular.Output(angle_to_target, yaw, true), -max_angular, max_angular);
                 // RCLCPP_INFO(this->get_logger(), "%.7f, %.7f", angle_to_target, yaw);
                 pub_cmd->publish(cmd_vel);
+                if(std::abs(angle_to_target - yaw) < 0.1f) deviation = false;
             } else {
-                linear.SetPID(0.03f, 0.02f, 0.04f);
+
                 cmd_vel.linear.x = std::clamp(linear.Output(distance_to_target), -max_linear, max_linear);
                 // cmd_vel.linear.x = 0.08f;
                 // RCLCPP_INFO(this->get_logger(), "%.7f, %.7f", cmd_vel.linear.x, cmd_vel.angular.z);

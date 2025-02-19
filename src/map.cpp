@@ -42,7 +42,7 @@ bool Map::is_free(double x, double y) const {
 
   dynamic_edt_map_ptr->getDistanceAndClosestObstacle(query_point, distance, closest_obstacle);
 
-  return distance > 0.3f; 
+  return distance > 0.23f;
 }
 
 // bool Map::is_free(double wx, double wy) const {

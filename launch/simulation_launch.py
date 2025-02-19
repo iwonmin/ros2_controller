@@ -8,7 +8,15 @@ def generate_launch_description():
         package= 'ros2_controller',
         namespace= '',
         executable= 'controlla_node',
-        output='screen'
+        output='screen',
+        parameters=[
+            {"angular_kp" : 1.73},
+            {"angular_ki" : 0.173},
+            {"angular_kd" : 0.41},
+            {"linear_kp" : 0.015},
+            {"linear_ki" : 0.010},
+            {"linear_kd" : 0.020},
+        ]
     )
     ld.add_action(controller_node)
 

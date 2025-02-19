@@ -31,8 +31,8 @@ public:
   bool is_free(double x, double y) const;
 
 
-private:
   Octree_ptr octree_ptr = nullptr;
+private:
   bool updated = false;
   double world_maxdist = 1.0;
   DynamicEDTMapPtr dynamic_edt_map_ptr = nullptr;
