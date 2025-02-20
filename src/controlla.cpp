@@ -22,12 +22,12 @@ CmdPublisher::CmdPublisher() : Node("cmd_publisher") {
     timer_cmd = this->create_wall_timer(50ms, std::bind(&CmdPublisher::timer_cmd_callback, this));
     // timer_octomap_reset = this->create_wall_timer(1s, std::bind(&CmdPublisher::clear_obstacle, this));
     // Parameters
-    this->declare_parameter("angular_kp", 1.7f);
-    this->declare_parameter("angular_ki", 0.12f);
-    this->declare_parameter("angular_kd", 0.5f);
-    this->declare_parameter("linear_kp", 0.03f);
-    this->declare_parameter("linear_ki", 0.02f);
-    this->declare_parameter("linear_kd", 0.04f);
+    this->declare_parameter("angular_kp", 1.73f);
+    this->declare_parameter("angular_ki", 0.173f);
+    this->declare_parameter("angular_kd", 0.41f);
+    this->declare_parameter("linear_kp", 0.15f);
+    this->declare_parameter("linear_ki", 0.10f);
+    this->declare_parameter("linear_kd", 0.20f);
     angular.SetPID(this->get_parameter("angular_kp").as_double(), this->get_parameter("angular_ki").as_double(), this->get_parameter("angular_kd").as_double());
     linear.SetPID(this->get_parameter("linear_kp").as_double(), this->get_parameter("linear_ki").as_double(), this->get_parameter("linear_kd").as_double());
 }
